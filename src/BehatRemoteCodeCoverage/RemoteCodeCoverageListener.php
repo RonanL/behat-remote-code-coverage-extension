@@ -85,7 +85,7 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
             return;
         }
 
-        $this->coverageGroup = uniqid($event->getSuite()->getName(), true);
+        $this->coverageGroup = uniqid((string) $event->getSuite()->getName(), true);
     }
 
     public function beforeScenario(ScenarioLikeTested $event)
@@ -113,7 +113,7 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
             return;
         }
 
-        $parts = pathinfo($event->getFeature()->getFile());
+        $parts = pathinfo((string) $event->getFeature()->getFile());
         Storage::storeCodeCoverage($this->getCoverage(), $this->targetDirectory, sprintf('%s-%s_%s', basename($parts['dirname']), $parts['filename'], $event->getNode()->getLine()));
     }
 
@@ -123,7 +123,7 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
             return;
         }
 
-        $parts = pathinfo($event->getFeature()->getFile());
+        $parts = pathinfo((string) $event->getFeature()->getFile());
         Storage::storeCodeCoverage($this->getCoverage(), $this->targetDirectory, sprintf('%s-%s', basename($parts['dirname']), $parts['filename']));
     }
 
