@@ -7,6 +7,8 @@ use Behat\Behat\EventDispatcher\Event\AfterScenarioTested;
 use Behat\Mink\Session;
 use RuntimeException;
 use SebastianBergmann\CodeCoverage\CodeCoverage;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Contracts\Cache\ItemInterface;
 use Webmozart\Assert\Assert;
 use Behat\Behat\EventDispatcher\Event\AfterFeatureTested;
 use Behat\Behat\EventDispatcher\Event\FeatureTested;
@@ -93,18 +95,37 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
         if (!$this->coverageEnabled) {
             return;
         }
+        $cache = new FilesystemAdapter();
 
         $coverageId = $event->getFeature()->getFile() . ':' . $event->getNode()->getLine();
 
+        $cache->get('collect_code_coverage', function (ItemInterface $item): string {
+            $item->expiresAfter(3600);
+
+            return 'true';
+        });
+        $cache->get('coverage_group', function (ItemInterface $item): string {
+            $item->expiresAfter(3600);
+
+            return $this->coverageGroup;
+        });
+        $cache->get('coverage_id', function (ItemInterface $item) use ($coverageId): string {
+            $item->expiresAfter(3600);
+
+            return $coverageId;
+        });
+
+        /*
         $minkSession = $this->mink->getSession();
 
         if (!$minkSession->isStarted()) {
             $minkSession->start();
         }
 
-        $minkSession->setCookie('collect_code_coverage', true);
+        $minkSession->setCookie('collect_code_coverage', 'true');
         $minkSession->setCookie('coverage_group', $this->coverageGroup);
         $minkSession->setCookie('coverage_id', $coverageId);
+        */
     }
 
     public function afterScenario(AfterScenarioTested $event)
@@ -112,6 +133,10 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
         if (!$this->coverageEnabled || 'scenario' !== $this->splitBy) {
             return;
         }
+        $cache = new FilesystemAdapter();
+        $cache->delete('collect_code_coverage');
+        $cache->delete('coverage_group');
+        $cache->delete('coverage_id');
 
         $parts = pathinfo((string) $event->getFeature()->getFile());
         Storage::storeCodeCoverage($this->getCoverage(), $this->targetDirectory, sprintf('%s-%s_%s', basename($parts['dirname']), $parts['filename'], $event->getNode()->getLine()));
@@ -144,6 +169,11 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
     {
         $this->coverageGroup = null;
         $this->coverageEnabled = false;
+
+        $cache = new FilesystemAdapter();
+        $cache->delete('collect_code_coverage');
+        $cache->delete('coverage_group');
+        $cache->delete('coverage_id');
     }
 
     /**
@@ -154,6 +184,7 @@ final class RemoteCodeCoverageListener implements EventSubscriberInterface
     {
         $requestUrl = $this->baseUrl . '/?export_code_coverage=true&coverage_group=' . urlencode($this->coverageGroup);
         $response = file_get_contents($requestUrl);
+
         $coverage = unserialize($response);
 
         if (!$coverage instanceof CodeCoverage) {
